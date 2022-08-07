@@ -1,0 +1,4 @@
+﻿**/desktop.ini
+*.pyc
+__pycache__
+.idea
