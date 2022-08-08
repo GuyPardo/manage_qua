@@ -83,13 +83,32 @@ def play_pulse(pulse, element, scale_amplitude=None, frequency=None, duration=No
         play(pulse * amp(scale_amplitude), element, duration=duration)
 
 
-@dataclass
-class QUAParameter:
-    type: type
-    value: typing.Any
+
+def iter_type(iter):
+    """
+    get the type of the elemets of iterable object iter.
+    returns error if: (1) iter is not an iterable or (2) iter has elements with different types
+    :param iter: an iterable with elements of a single type
+    :return:type : the type of the elements of iter
+    """
+    if not isinstance(iter, typing.Iterable):
+        raise TypeError("iter must be an iterable")
+    else:
+        first_type = type(iter[0]) # get type of first element
+        # verify that other elements have the same type
+        for element in iter:
+            if type(element) != first_type:
+                raise TypeError("elements of iter must be of the same type")
+        return first_type
 
 
-def qua_declare(type_: type):
+def qua_declare(type_:type):
+    """
+    performs QUA declare() statement with the correct type ()
+    :param type_:type: a type object. int, float or bool
+    :return: a QUA variable with the appropriate type
+    """
+
     if type_ == int:
         return declare(int)
     elif type_ == float:
@@ -97,14 +116,10 @@ def qua_declare(type_: type):
     elif type_ == bool:
         return declare(bool)
     else:
-        raise Exception("qua supports only int float or bool")
+        raise Exception("qua supports only int, float, or bool")
 
 
 class QUAExperiment:
-    #TODO - this is redundant. need to find a way to read the type from the variable
-    def __init__(self):
-        pass
-
     def single_run(self, **params):
         raise NotImplemented()
 
@@ -112,12 +127,14 @@ class QUAExperiment:
         pass
 
     def for_each(self, **params):
+        #TODO add repetitions
+        #TODO  change confusing  names
         with program() as prog:
             run_params = dict()
             for param_name in params.keys():
-                run_params[param_name] = qua_declare(params[param_name].type)
+                run_params[param_name] = qua_declare(iter_type(params[param_name]))
 
-            with for_each_(tuple(run_params.values()), tuple([param.value for param in params.values()])):
+            with for_each_(tuple(run_params.values()), tuple([value for value in params.values()])):
                 self.single_run(**run_params)
 
         return prog
@@ -139,8 +156,8 @@ config = cg.get_config()
 ## test Rabi
 
 rabi = RabiExperiment()
-params = {"scale_amplitude": QUAParameter(float, value=[0.1, 0.5, 1]),
-          "duration": QUAParameter(int, value=[100, 200, 300])}
+params = {"scale_amplitude": [0.1, 0.5, 1.0],
+          "duration": [100, 200, 300]}
 
 prog = rabi.for_each(**params)
 
