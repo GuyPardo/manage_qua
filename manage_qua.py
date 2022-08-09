@@ -254,7 +254,7 @@ class QUAExperiment:
     pulse sequence. the QUAExperiment class methods then deal with performing this sequence in loops within a QUA program.
 
     """
-    def single_run(self, **params):
+    def single_run(self, config:QUAConfig):
         raise NotImplemented()
 
     def nd_loop(self):
@@ -264,24 +264,24 @@ class QUAExperiment:
     def for_each(self, config:QUAConfig, save_to_labber=True):
         """
 
-        :param config:
+        :param config:QUAConfig
         :param save_to_labber:
         :return:
         """
         #TODO add repetitions
         #TODO deal with Labber
 
-        # get dictionary with iterated parameters (=variables):
-        variables_config =QUAConfig(*config.get_iterables())
-        variables_dict = variables_config.get_values_dict()
+        # get Config object with only iterated QUA parameters (=variables): (filter out normal Parameters and
+        # un-iterated QUA parameters)
+        variables_config =QUAConfig(*config.get_iterables()).get_qua_params()
+        #variables_dict = variables_config.get_values_dict()
+        print(variables_config.param_list)
         # QUA program:
         with program() as prog:
             self.output_temp.get_qua_vars(assign_flag=False)
             self.stream.get_qua_vars(assign_flag=False)
-            run_params_dict = config.get_qua_vars(output_format='dict')
+            config.get_qua_vars()
             # QUA loop:
-            # print(variables_dict)
-            # print(run_params_dict)
             with for_each_(tuple([param.qua_var for param in variables_config.param_list]), tuple([param.value for param in variables_config.param_list])):
                 self.single_run(config)
         return prog
@@ -289,27 +289,17 @@ class QUAExperiment:
 
 # an example:
 class RabiExperiment(QUAExperiment):
-    # TODO add __init__ and initialize attributes such as experiment name and other labber tags
     def __init__(self):
+        #TODO  initialize attributes such as experiment name and other labber tags or maybe this should be in Config?
+        #TODO consider writing a default init. fucntion in the parent class for the output Configs
         self.output_temp = QUAConfig(QUAParameter('I', None, 'a.u.', qua_type = float), QUAParameter('Q',None,'a.u.',qua_type = float)) #TODO better name
         self.stream = QUAConfig(QUAParameter('I', None, 'a.u.', qua_type = 'stream'), QUAParameter('Q',None,'a.u.',qua_type = 'stream'))
 
     def single_run(self, config:QUAConfig):
-        """
-
-        :param params:
-        :param qua_params:
-        :return:
-        """
-        # play_pulse(f'X_{params["qubit_idx"]}', f'drive{params["qubit_idx"]}', scale_amplitude=params["scale_amplitude"], duration=params["duration"])
-        # align(f'drive{params["qubit_idx"]}', f'readout{params["qubit_idx"]}')
-        # measure("readout", f'readout{params["qubit_idx"]}', None,
-        #         ("simple_cos", "out_I", self.output_temp.I.qua_var))
-
-        play_pulse('X_1', 'drive1', scale_amplitude=config.scale_amplitude.qua_var,
+        play_pulse(f'X_{config.qubit_idx.value}', f'drive{config.qubit_idx.value}', scale_amplitude=config.scale_amplitude.qua_var,
                    duration=config.duration.qua_var)
-        align('drive1', 'readout1')
-        measure("readout", 'readout1', None,
+        align(f'drive{config.qubit_idx.value}', f'readout{config.qubit_idx.value}')
+        measure("readout", f'readout{config.qubit_idx.value}', None,
                 ("simple_cos", "out_I", self.output_temp.I.qua_var))
 
         save(self.output_temp.Q.qua_var, self.stream.I.qua_var)
@@ -330,10 +320,12 @@ config = cg.get_config()
 ## test Rabi
 
 rabi = RabiExperiment()
-params = QUAConfig(QUAParameter("scale_amplitude", [0.1,0.5,1.0]),QUAParameter("duration", [100, 200, 300]), em.Parameter('qubit_idx',1))
+rabi_config = QUAConfig(QUAParameter("scale_amplitude", [0.1,0.5,1.0]),
+                        QUAParameter("duration", [200//4, 400//4, 800//4], units='clock_cycles (4ns)'),
+                        em.Parameter('qubit_idx',2))
 
 
-prog = rabi.for_each(params)
+prog = rabi.for_each(rabi_config)
 
 # ## test play_pulse
 # t_vec = [10, 30, 100]
