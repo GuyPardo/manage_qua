@@ -282,8 +282,8 @@ class QUAExperiment:
             # QUA loop:
             # print(variables_dict)
             # print(run_params_dict)
-            with for_each_(tuple([run_params_dict[param.name] for param in variables_config.param_list]), tuple([value for value in variables_dict.values()])):
-                self.single_run(**run_params_dict)
+            with for_each_(tuple([param.qua_var for param in variables_config.param_list]), tuple([param.value for param in variables_config.param_list])):
+                self.single_run(config)
         return prog
 
 
@@ -294,16 +294,22 @@ class RabiExperiment(QUAExperiment):
         self.output_temp = QUAConfig(QUAParameter('I', None, 'a.u.', qua_type = float), QUAParameter('Q',None,'a.u.',qua_type = float)) #TODO better name
         self.stream = QUAConfig(QUAParameter('I', None, 'a.u.', qua_type = 'stream'), QUAParameter('Q',None,'a.u.',qua_type = 'stream'))
 
-    def single_run(self, **params):
+    def single_run(self, config:QUAConfig):
         """
 
         :param params:
         :param qua_params:
         :return:
         """
-        play_pulse(f'X_{params["qubit_idx"]}', f'drive{params["qubit_idx"]}', scale_amplitude=params["scale_amplitude"], duration=params["duration"])
-        align(f'drive{params["qubit_idx"]}', f'readout{params["qubit_idx"]}')
-        measure("readout", f'readout{params["qubit_idx"]}', None,
+        # play_pulse(f'X_{params["qubit_idx"]}', f'drive{params["qubit_idx"]}', scale_amplitude=params["scale_amplitude"], duration=params["duration"])
+        # align(f'drive{params["qubit_idx"]}', f'readout{params["qubit_idx"]}')
+        # measure("readout", f'readout{params["qubit_idx"]}', None,
+        #         ("simple_cos", "out_I", self.output_temp.I.qua_var))
+
+        play_pulse('X_1', 'drive1', scale_amplitude=config.scale_amplitude.qua_var,
+                   duration=config.duration.qua_var)
+        align('drive1', 'readout1')
+        measure("readout", 'readout1', None,
                 ("simple_cos", "out_I", self.output_temp.I.qua_var))
 
         save(self.output_temp.Q.qua_var, self.stream.I.qua_var)
@@ -324,7 +330,7 @@ config = cg.get_config()
 ## test Rabi
 
 rabi = RabiExperiment()
-params = QUAConfig(QUAParameter("scale_amplitude", 1.0),QUAParameter("duration", [100, 200, 300]), em.Parameter('qubit_idx',1))
+params = QUAConfig(QUAParameter("scale_amplitude", [0.1,0.5,1.0]),QUAParameter("duration", [100, 200, 300]), em.Parameter('qubit_idx',1))
 
 
 prog = rabi.for_each(params)
