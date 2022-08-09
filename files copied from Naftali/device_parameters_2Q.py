@@ -68,12 +68,12 @@ device_parameters = \
         "ampl_drive_qubit2":0.0015,# 30e-3,#33.4e-3,#18.1e-3,##0.0002,#3.9e-3,#0.00294,#0.01, # #OPX XY drive amplitude for qubit 2, Volt
         "ampl_drive_qubit1_12": 28.5e-3,#33.4e-3/np.sqrt(2),  #OPX XY drive amplitude for qubit 1 1->2 transition, Volt
         "ampl_drive_qubit2_12":30e-3,# 33.4e-3/np.sqrt(2), #OPX XY drive amplitude for qubit 2 1->2 transition, Volt
-        "ampl_ro_qubit1": 0.1,  # 0.1, #OPX readout amplitude for qubit 1, Volt
-        "ampl_ro_qubit2": 0.1,#0.1, #OPX readout amplitude for qubit 2, Volt
+        "ampl_ro_qubit1": 0.0015, #changed for simulation #0.1,  # 0.1, #OPX readout amplitude for qubit 1, Volt
+        "ampl_ro_qubit2": 0.0015, #changed for simulation   #0.1,#0.1, #OPX readout amplitude for qubit 2, Volt
         "pulse_length_ro_qubit1": 1000,#2000, #Readout pulse length for qubit 1, ns
         "pulse_length_ro_qubit2": 1000,  # 2000, #Readout pulse length for qubit 2, ns
         "time_of_flight": 252,#256, #ns
-        "wait_time": 150, #30000#500, # *4 ns. Time to wait after each experiment for qubit decay
+        "wait_time": 150, #changed for simulation #30000#500, # *4 ns. Time to wait after each experiment for qubit decay
         "phase_rot_1": 0.445104,# rotation of readout, qubit 1 (radians)
         "phase_rot_2": -0.4492,# # rotation of readout, qubit 2 (radians)
         "threshold_1": 0, #threshold for qubit 1 measurement

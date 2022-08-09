@@ -1,11 +1,13 @@
 # manange_qua
+import itertools
 import sys
 import typing
+from copy import deepcopy
 
 sys.path.append("..")
 sys.path.append(r"\\132.64.80.214\overlordcommon\Users\Guy\PHD\repos\experiment-manager")
 import experiment_manager
-
+#import Labber_utils as lu
 sys.path.append(r"\\132.64.80.214\overlordcommon\Users\Guy\PHD\repos\manage_qua\files copied from Naftali")
 # Nafteli's imports:
 import two_qubit_config_gates
@@ -33,22 +35,33 @@ plt.ion()
 from dataclasses import dataclass
 
 
-# @dataclass
-# class MicrowaveGenerator:
-#     """
-#     a class for storing configuration data for microwave generators
-#     """
-#     mg_adress:str
-#     mg_class
 
+
+# ------------- utility functions------------------
 
 def bool_list_2_int(lst):
     """
     get an int from a list of bools
     :param lst:List[bool] a list of booleans
-    :return: an int that is concatinating the bools of the list into a binary number, and then converting to int.
+    :return: an int that is concatenating the bools of the list into a binary number, and then converting to int.
     """
     return int(''.join(['1' if x else '0' for x in lst]), 2)
+
+
+
+
+
+
+# get config dict from device params file
+def get_qua_config_dict():
+    cg = init_config_generator()
+    create_readout_elements(cg)
+    create_drive_elements(cg)
+    create_pulses(cg)
+    add_OPX_dc_elements(cg)
+    config = cg.get_config()
+    return config
+
 
 
 def play_pulse(pulse, element, scale_amplitude=None, frequency=None, duration=None):
@@ -131,9 +144,9 @@ class QUAParameter(em.Parameter):
     """
     name:str
     value:typing.Any
-    qua_type: type = None
     units:str
     is_iterated:bool
+    qua_type: type = None
 
     def __init__(self, name:str, value, units=None, is_iterated=None, qua_type=None):
         """
@@ -142,9 +155,9 @@ class QUAParameter(em.Parameter):
 
       :param value: bool, int, float, or an iterable of one of them, or None (typically for a stream variable)
 
-      :param units: str  - physical units of the parameter. IMPORTANT!: this is a cosmetics thing for display
-      in Labber only! the quantities themselves are always passed to OPX as given and treated according to
-      the QUA defaults. TODO - something smarter than that, maybe with the qualang_tools.units module
+      :param units: str  - physical units of the parameter. !IMPORTANT WARNING!: this is a cosmetics thing for display
+      in Labber only. the quantities themselves are always passed to OPX as given and treated according to
+      the QUA default conventions. TODO - something smarter than that, maybe with the qualang_tools.units module
 
       :param is_iterated: bool. determines whether the value is constant or iterated. if iterated, then value
       should be an Iterable. by default self.is_iterated is defined according to whether value is an
@@ -246,6 +259,18 @@ class QUAConfig(em.Config):
             return qua_vars
 
 
+def qua_run(program, simulate=True):
+    config = get_qua_config_dict()
+    if simulate:
+        qmManager = QuantumMachinesManager()
+        job = qmManager.simulate(config, program, SimulationConfig(2500))
+    return job
+
+def qua_get_result(job, plot_samples=False):
+    if plot_samples:
+        job.get_simulated_samples().con1.plot()
+    return job.result_handles
+
 
 class QUAExperiment:
     """
@@ -254,28 +279,87 @@ class QUAExperiment:
     pulse sequence. the QUAExperiment class methods then deal with performing this sequence in loops within a QUA program.
 
     """
+
+    def __init__(self):
+        self.stream = None
+        self.output_temp = None
+
+
     def single_run(self, config:QUAConfig):
         raise NotImplemented()
 
-    def nd_loop(self):
-        #TODO: implement using self.for_each()
-        pass
+    def initialize_streams(self, stream_config:QUAConfig):
+        """
+        initialize the attributes self.stream and self.output_temp
+        :param stream_config:QUAConfig that contains QUAParameters that define what quantities we want to stream
+        for example: stream_config = QUAConfig(QUAParameter('I', None, 'a.u', qua_type = float),
+                                               QUAParameter('Q', None, 'a.u', qua_type = float))
+        """
+        self.output_temp = deepcopy(stream_config)
+        self.stream = deepcopy(stream_config)
+        for param in self.stream.param_list:
+            param.qua_type = 'stream'
 
-    def for_each(self, config:QUAConfig, save_to_labber=True):
+    def nd_loop(self, loop_config:QUAConfig):
+        """
+        perform the experiment in an N-dimensional loop
+
+        :param loop_config:QUAConfig containing the experiment parameters. iterated QUAParameters will be looped on.
+        it also has to include a regular Parameter with name 'repetitions' amd integer value to indicate averaging repetitions
+        #TODO input verification
+
+        :return: a QUA program
         """
 
-        :param config:QUAConfig
-        :param save_to_labber:
-        :return:
+        # get Config object with only iterated QUAParameters (=variables): (filter out normal Parameters and
+        # un-iterated QUAParameters)
+        variables_config =QUAConfig(*loop_config.get_iterables()).get_qua_params()
+
+        # unwrap looped values to get the format that QUA's for_each_() can handle (tuple of tuples, where the nth
+        # inner tuple contains all the values that the nth parameter takes throughout the entire N-dimensional loop)
+        iteration_tuple = tuple(zip(*tuple(itertools.product(*variables_config.get_values()))))
+
+        # QUA program:
+        with program() as prog:
+            self.output_temp.get_qua_vars(assign_flag=False)
+            self.stream.get_qua_vars(assign_flag=False)
+            loop_config.get_qua_vars()
+            # QUA loops:
+            # external averaging loop:
+            rep = declare(int)
+            with for_(rep,0,rep<loop_config.repetitions.value, rep + 1):
+                # N-dimensional QUA loop:
+                with for_each_(tuple([param.qua_var for param in variables_config.param_list]), iteration_tuple):
+                    self.single_run(loop_config)
+
+                # process stream
+                loop_lengths = []
+                for param in variables_config.param_list:
+                    loop_lengths.append(len(param.value))
+
+            with stream_processing():
+                for param in self.stream.param_list:
+                    param.qua_var.buffer(*loop_lengths).average().save(param.name) # TODO make sure that names are the same. maybe say this in doc
+
+        return prog
+
+    def for_each(self, config:QUAConfig):
         """
-        #TODO add repetitions
-        #TODO deal with Labber
+        performs a looped experiment with QUA's for_each_ conventions: a 1D loop where you give a 1D set of values to
+        each parameter and the loops pairs them element-wise. probably this is less useful than nd_loop (see above)
+        and in particular I am not sure how to integrate this with Labber
+
+        :param config:QUAConfig with one or more iterated QUAParameters that all have the same length. (un-iterated
+        Parameters and QUAParameters are also allowed)
+
+        :return: a QUA program
+
+        """
 
         # get Config object with only iterated QUA parameters (=variables): (filter out normal Parameters and
         # un-iterated QUA parameters)
         variables_config =QUAConfig(*config.get_iterables()).get_qua_params()
-        #variables_dict = variables_config.get_values_dict()
-        print(variables_config.param_list)
+
         # QUA program:
         with program() as prog:
             self.output_temp.get_qua_vars(assign_flag=False)
@@ -293,57 +377,96 @@ class QUAExperiment:
 
         return prog
 
+    # def labber_read(self,result,config,labber_log_name=None):
+    #     # get labber logfile parameters:
+    #     step_list = QUAConfig(*config.get_qua_vars.get_iterables()).get_labber_step_list()
+    #     log_list = self.stream.get_labber_log_list()
+    #     # choose name
+    #     if labber_log_name:
+    #         log_name = labber_log_name
+    #     else:
+    #         log_name = self.experiment_name
+    #     log_name = lu.get_log_name(log_name) # this generates automatic numbering and prevents overwrite
+    #
+    #     #create labber logfile
+    #     logfile = Labber.createLogFile_ForData(log_name, log_list, step_list)
+    #
+    #     #add data:
+    #
+    #     for param in self.stream.param_list:
+    #         getattr(results,param.name).fetch_all()
 
+# -------------------------------------------------------------------------------------------------------------------- #
 
-# an example:
+# an example of usage:
+
+# define an experiment: this example experiment is a rabi sequence but it also streams the parameters amplitude and
+# duration such that we will be able to see that the loops work:
 class RabiExperiment(QUAExperiment):
     def __init__(self):
-        #TODO  initialize attributes such as experiment name and other labber tags or maybe this should be in Config?
-        #TODO consider writing a default init. fucntion in the parent class for the output Configs
-        self.output_temp = QUAConfig(QUAParameter('I', None, 'a.u.', qua_type = float)) #TODO better name
-        self.stream = QUAConfig(QUAParameter('I', None, 'a.u.', qua_type = 'stream'))
+        # define stream variable I with units a.u. and type float,
+        #        stream variable amplitude with no units and type float
+        #        stream varialbe duration with units 'clock-cycle' and type int:
+        stream_config = QUAConfig(QUAParameter('I', None, 'a.u.', qua_type = float),
+                                  QUAParameter('amplitude',None, qua_type = float),
+                                  QUAParameter('duration',None,'clock-cycles' ,qua_type=int))
+
+        #initialize stream variables:
+        self.initialize_streams(stream_config)
 
     def single_run(self, config:QUAConfig):
+        # implement the pulse sequence:
         play_pulse(f'X_{config.qubit_idx.value}', f'drive{config.qubit_idx.value}', scale_amplitude=config.scale_amplitude.qua_var,
                    duration=config.duration.qua_var)
         align(f'drive{config.qubit_idx.value}', f'readout{config.qubit_idx.value}')
         measure("readout", f'readout{config.qubit_idx.value}', None,
                 ("simple_cos", "out_I", self.output_temp.I.qua_var))
 
+        # save data: in a real experiment we will only save I (maybe Q) but here we also want to stream the amplitude
+        # and duration to see in the simulator that the loops work the way we want:
         save(self.output_temp.I.qua_var, self.stream.I.qua_var)
+        save(config.scale_amplitude.qua_var, self.stream.amplitude.qua_var)
+        save(config.duration.qua_var, self.stream.duration.qua_var)
 
         if wait_time>0:
             wait(wait_time)
 
 
-
-# get config dict from param file
-cg = init_config_generator()
-create_readout_elements(cg)
-create_drive_elements(cg)
-create_pulses(cg)
-add_OPX_dc_elements(cg)
-config = cg.get_config()
-
-## test Rabi
-
+# test the Rabi experiment:
+#define an instance of the new class:
 rabi = RabiExperiment()
-rabi_config = QUAConfig(QUAParameter("scale_amplitude", [0.1,0.5,1.0, 2.0]),
-                        QUAParameter("duration", [200//4, 400//4, 800//4, 300//4], units='clock_cycles (4ns)'),
+
+# define the experiment configurations for 2D loop: we have 2 QUA parameters that we are going to loop on,
+# and two normal parameters that is constant (#TODO looping on regular parameters (not in real-time) is not implemented yet)
+rabi_config = QUAConfig(em.Parameter("repetitions",2),
+                        QUAParameter("duration",[200//4, 400//4, 800//4], units='clock_cycles (4ns)'),
+                        QUAParameter("scale_amplitude", [0.1,0.5,1.0, 2.5]),
                         em.Parameter('qubit_idx',2))
 
+# use method nd_loops to get the QUA program
+prog = rabi.nd_loop(rabi_config)
 
-prog = rabi.for_each(rabi_config)
+# get qua configurations dict from device parameters (external file):
+config = get_qua_config_dict()
 
-
-#### main #####
-
-# simulate
+# simulate the program
 qmManager = QuantumMachinesManager()
-job = qmManager.simulate(config,prog, SimulationConfig(2500))
+job = qmManager.simulate(config,prog, SimulationConfig(14000))
+
+# get samples
 samples = job.get_simulated_samples()
+
+#get "measuement" results
 results = job.result_handles
 
+print('I:')
+print(results.I.fetch_all()) # here we get zeros because this is just a simulation
 
-#plot
+print('amplitude:')
+print(results.amplitude.fetch_all())
+
+print('duration:')
+print(results.duration.fetch_all())
+
+#plot samples
 samples.con1.plot()
