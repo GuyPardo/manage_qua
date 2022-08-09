@@ -65,32 +65,29 @@ def play_pulse(pulse, element, scale_amplitude=None, frequency=None, duration=No
     :return:
     """
 
-    # the play statement accepts a None value for duration so we don't have to worry about ampliutude and frequency:
+    # the play statement supports also a None value for duratio so we only have to worry about amplitude and frequency:
 
+    # convert the bool information of whther we change amplitude, frequency, both or none into a number from 0 to 3:
     indicator = bool_list_2_int([bool(scale_amplitude), bool(frequency)])
 
+    # if statement:
     if indicator == 0:  # = [0,0] change nothing (only possibly duration )
-        #print("i am in case 0")
         play(pulse, element, duration=duration)
     elif indicator == 1:  # = [0,1]:  change only frequency (and possibly duration)
-        #print("i am in case 1")
         update_frequency(element, frequency)
         play(pulse, element, duration)
     elif indicator == 2:  # = [1,0]: change only scale_amplitude (and possibly duration)
-        #print("i am in case 2")
         play(pulse * amp(scale_amplitude), element, duration=duration)
     elif indicator == 3:  # = [1,1]: change amplitude and frequency (and possibly duration)
-        #print("i am in case 3")
         update_frequency(element, frequency)
         play(pulse * amp(scale_amplitude), element, duration=duration)
-
 
 
 def iter_type(input):
     """
-    get the type of the elements of iterable object input. ot yjr type of input itself if it is not iterable
-    returns error if input has elements with different types
-    :param input: an iterable with elements of a single type ot a non iterable
+    get the type of the elements of iterable object input. o the type of input itself if it is not iterable.
+    returns error if input has elements with different types.
+    :param input: an iterable that that all its elements have the same type, or a non iterable
     :return:type :
     """
     if not isinstance(input, typing.Iterable):
@@ -106,8 +103,8 @@ def iter_type(input):
 
 def qua_declare(type_):
     """
-    performs QUA declare() statement with the correct type ()
-    :param type_:type: a type object. int, float or bool, or the string 'stream'
+    performs QUA declare() statement with the correct type
+    :param type_:type: a type object. int, float or bool, or the string 'stream'  for q qua stream veriable
     :return: a QUA variable with the appropriate type
     """
 
@@ -122,13 +119,16 @@ def qua_declare(type_):
     else:
         raise Exception("qua supports only int, float,  bool, or 'stream'")
 
-# maybe this is not neede
-# class QUAParameter(em.Parameter):
-#     def __init__(self, name:str, value, units = None, is_iterated = None):
-#         super().__init__(name, value, units, is_iterated)
-
 @dataclass()
 class QUAParameter(em.Parameter):
+    """
+    a class for dealing with experimental parameters that need to be represented as a QUA variable
+    attributes:
+    name, value, units, is_iterated, qua_type : see ctor doc-string (run QUAParameter?)
+
+    qua_var: the QUA-variable representing the parameter. initialized to None, but can be declared and assigned
+    within a QUA program. for example using the methods QUAParameter.declare() or QUAConfig.get_qua_vars()
+    """
     name:str
     value:typing.Any
     qua_type: type = None
@@ -136,68 +136,124 @@ class QUAParameter(em.Parameter):
     is_iterated:bool
 
     def __init__(self, name:str, value, units=None, is_iterated=None, qua_type=None):
+        """
+      creates a QUAParameter object
+      :param name: str -  name of the parameter
+
+      :param value: bool, int, float, or an iterable of one of them, or None (typically for a stream variable)
+
+      :param units: str  - physical units of the parameter. IMPORTANT!: this is a cosmetics thing for display
+      in Labber only! the quantities themselves are always passed to OPX as given and treated according to
+      the QUA defaults. TODO - something smarter than that, maybe with the qualang_tools.units module
+
+      :param is_iterated: bool. determines whether the value is constant or iterated. if iterated, then value
+      should be an Iterable. by default self.is_iterated is defined according to whether value is an
+      Iterable, but this can be changed if you want, for example, a constant value that is a list.
+
+      :param qua_type:type or str:  int, float, bools or the string "stream". determines the type of the
+      qua_variable. if not supplied by user, initialized automatically according to the type of value. so practically
+      you'd only want to supply it manually in the case of a stream variable.
+
+        """
+        # run parent ctor:
         super().__init__(name, value, units, is_iterated)
+
+        # initialize qua_var attribute to None
         self.qua_var = None
 
+        #initiallize qua_type attribute
         if qua_type is None:
             self.qua_type = iter_type(self.value)
         else:
             self.qua_type = qua_type
 
     def declare(self):
+        """
+        to be used within a QUA program. performs QUA's declare() with the correct type (given by self.qua_type) and
+        stores the resulting QUA variable in self.qua_var
+        """
         self.qua_var = qua_declare(self.qua_type)
 
 
 
 class QUAConfig(em.Config):
-    def get_qua_vars(self, assign_flag=True, get_list=False, get_dict = False):
+    """
+    child class of experiment_manager.Config. used to store and manipulate a list of QUAParameter objects. (or a
+    mixed list with some regulare Parameters and some QUAPArameters)
+    """
+    def get_qua_params(self):
         """
-        to be used within a qua program
-        TODO more doc.
-        only one of get_dict or get_list can be tr
-        :return:
+        returns a QUAConfig object with only the QUAParameters in the original QUAConfig. IMPORTANT: note that
+        Parameters and QUAParameters are passed by reference! so the new QUAConfig still points to the original
+        Parameters. use python's deepcopy() if you want a new copy.
+
+        :return: QUAConfig
         """
+        new_list = []
+        for param in self.param_list:
+            if isinstance(param, QUAParameter):
+                new_list.append(param)
+        return QUAConfig(*new_list)
+
+    def get_normal_params(self):
+        """
+        returns an experiment_manager.Config object with only the Parameters in the original QUAConfig that are not
+        QUAParameters. IMPORTANT: note that Parameters and QUAParameters are passed by reference! so the new
+        Config still points to the original Parameters. use python's deepcopy() if you want a new copy.
+
+        :return: experiment_manager.Config
+        """
+        new_list = []
+        for param in self.param_list:
+            if not isinstance(param, QUAParameter):
+                new_list.append(param)
+        return em.Config(*new_list)
+
+    def get_qua_vars(self, assign_flag=True, output_format = None):
+        """
+        to be used within a QUA program.
+        declares (and possibly assigns) all qua variables stored in the QUAConfig object.
+        type for declaration and values for assignment are taken from the attributes of each QUAParameter object
+        the QUA variables are stored in the qua_var attribute of each QUAParameter object.
+
+        :param assign_flag:bool: decide whether also to assign or only to declare, but in any case iterated
+        Parameters are never assigned.
+
+        :param output_format: str: 'list' or 'dict' or None. decide which format to output, if at all.
+
+        :return: if output_format==None: no return. if output_format=list: returns a list of QUA variables. if
+        output_format=='dict' returns a dict with keys that are the QUAParameters names and values that are the
+        corresponding QUA variables
+        """
+        get_list = output_format =='list'
+        get_dict = output_format == 'dict'
         if get_list:
             qua_vars = []
         if get_dict:
             qua_vars = dict()
 
         for param in self.param_list:
-            # print(param.qua_type)
-
-            if param.qua_var is None:
-                param.declare()
-            if (not param.is_iterated) and assign_flag:
-                assign(param.qua_var, param.value)
-            if get_list:
-                qua_vars.append(param.qua_var)
-            if get_dict:
-                qua_vars[param.name] = param.qua_var
+            if isinstance(param,QUAParameter):
+                if param.qua_var is None:
+                    param.declare()
+                if (not param.is_iterated) and assign_flag:
+                    assign(param.qua_var, param.value)
+                if get_list:
+                    qua_vars.append(param.qua_var)
+                if get_dict:
+                    qua_vars[param.name] = param.qua_var
         if get_list or get_dict:
             return qua_vars
-
-    # def get_qua_vars_dict(self,assign_flag=True):
-    #     """
-    #     to be used within a qua program
-    #     TODO more doc.
-    #     :return:
-    #     """
-    #     qua_vars = dict()
-    #     for param in self.param_list:
-    #         qua_var = qua_declare(param.type)
-    #         if (not param.is_iterated) and assign_flag:
-    #             assign(qua_var, param.value)
-    #         qua_vars[param.name] = qua_var
-    #     return qua_vars
-
-
-
-
-
 
 
 
 class QUAExperiment:
+    """
+    an abstract class (to be used only as a parent for user defined classes) for dealing with an experiment that uses
+    QUA.  for each new experiment the user has to implement the single_run method which defines a single execution
+    pulse sequence. the QUAExperiment class methods then deal with performing this sequence in loops within a QUA program.
+
+    """
     def single_run(self, **params):
         raise NotImplemented()
 
@@ -206,8 +262,13 @@ class QUAExperiment:
         pass
 
     def for_each(self, config:QUAConfig, save_to_labber=True):
+        """
+
+        :param config:
+        :param save_to_labber:
+        :return:
+        """
         #TODO add repetitions
-        #TODO add streaming
         #TODO deal with Labber
 
         # get dictionary with iterated parameters (=variables):
@@ -217,7 +278,7 @@ class QUAExperiment:
         with program() as prog:
             self.output_temp.get_qua_vars(assign_flag=False)
             self.stream.get_qua_vars(assign_flag=False)
-            run_params_dict = config.get_qua_vars(get_dict=True)
+            run_params_dict = config.get_qua_vars(output_format='dict')
             # QUA loop:
             # print(variables_dict)
             # print(run_params_dict)
@@ -226,19 +287,26 @@ class QUAExperiment:
         return prog
 
 
-# example:
+# an example:
 class RabiExperiment(QUAExperiment):
     # TODO add __init__ and initialize attributes such as experiment name and other labber tags
     def __init__(self):
-        self.output_temp = QUAConfig(QUAParameter('I1', None, 'a.u.', qua_type = float), QUAParameter('I2',None,'a.u.',qua_type = float)) #TODO better name
-        self.stream = QUAConfig(QUAParameter('I1', None, 'a.u.', qua_type = 'stream'), QUAParameter('I2',None,'a.u.',qua_type = 'stream'))
-    def single_run(self, **rabi_params):
-        play_pulse('X_1', 'drive1', scale_amplitude=rabi_params["scale_amplitude"], duration=rabi_params["duration"])
-        align('drive1', 'readout1')
-        measure("readout", "readout1" , None,
-                ("simple_cos", "out_I", self.output_temp.I1.qua_var))
+        self.output_temp = QUAConfig(QUAParameter('I', None, 'a.u.', qua_type = float), QUAParameter('Q',None,'a.u.',qua_type = float)) #TODO better name
+        self.stream = QUAConfig(QUAParameter('I', None, 'a.u.', qua_type = 'stream'), QUAParameter('Q',None,'a.u.',qua_type = 'stream'))
 
-        save(self.output_temp.I1.qua_var, self.stream.I1.qua_var)
+    def single_run(self, **params):
+        """
+
+        :param params:
+        :param qua_params:
+        :return:
+        """
+        play_pulse(f'X_{params["qubit_idx"]}', f'drive{params["qubit_idx"]}', scale_amplitude=params["scale_amplitude"], duration=params["duration"])
+        align(f'drive{params["qubit_idx"]}', f'readout{params["qubit_idx"]}')
+        measure("readout", f'readout{params["qubit_idx"]}', None,
+                ("simple_cos", "out_I", self.output_temp.I.qua_var))
+
+        save(self.output_temp.Q.qua_var, self.stream.I.qua_var)
 
         if wait_time>0:
             wait(wait_time)
@@ -256,7 +324,7 @@ config = cg.get_config()
 ## test Rabi
 
 rabi = RabiExperiment()
-params = QUAConfig(QUAParameter("scale_amplitude", 1.0),QUAParameter("duration", [100, 200, 300]))
+params = QUAConfig(QUAParameter("scale_amplitude", 1.0),QUAParameter("duration", [100, 200, 300]), em.Parameter('qubit_idx',1))
 
 
 prog = rabi.for_each(params)
