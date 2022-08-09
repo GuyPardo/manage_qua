@@ -284,7 +284,15 @@ class QUAExperiment:
             # QUA loop:
             with for_each_(tuple([param.qua_var for param in variables_config.param_list]), tuple([param.value for param in variables_config.param_list])):
                 self.single_run(config)
+
+            # process stream
+            loop_length = len(variables_config.param_list[0].value)  # from first parameter since they are all the same
+            with stream_processing():
+                for param in self.stream.param_list:
+                    param.qua_var.buffer(loop_length).average().save(param.name) # TODO make sure that names are the same. maybe say this in doc
+
         return prog
+
 
 
 # an example:
@@ -292,8 +300,8 @@ class RabiExperiment(QUAExperiment):
     def __init__(self):
         #TODO  initialize attributes such as experiment name and other labber tags or maybe this should be in Config?
         #TODO consider writing a default init. fucntion in the parent class for the output Configs
-        self.output_temp = QUAConfig(QUAParameter('I', None, 'a.u.', qua_type = float), QUAParameter('Q',None,'a.u.',qua_type = float)) #TODO better name
-        self.stream = QUAConfig(QUAParameter('I', None, 'a.u.', qua_type = 'stream'), QUAParameter('Q',None,'a.u.',qua_type = 'stream'))
+        self.output_temp = QUAConfig(QUAParameter('I', None, 'a.u.', qua_type = float)) #TODO better name
+        self.stream = QUAConfig(QUAParameter('I', None, 'a.u.', qua_type = 'stream'))
 
     def single_run(self, config:QUAConfig):
         play_pulse(f'X_{config.qubit_idx.value}', f'drive{config.qubit_idx.value}', scale_amplitude=config.scale_amplitude.qua_var,
@@ -302,7 +310,7 @@ class RabiExperiment(QUAExperiment):
         measure("readout", f'readout{config.qubit_idx.value}', None,
                 ("simple_cos", "out_I", self.output_temp.I.qua_var))
 
-        save(self.output_temp.Q.qua_var, self.stream.I.qua_var)
+        save(self.output_temp.I.qua_var, self.stream.I.qua_var)
 
         if wait_time>0:
             wait(wait_time)
@@ -320,30 +328,12 @@ config = cg.get_config()
 ## test Rabi
 
 rabi = RabiExperiment()
-rabi_config = QUAConfig(QUAParameter("scale_amplitude", [0.1,0.5,1.0]),
-                        QUAParameter("duration", [200//4, 400//4, 800//4], units='clock_cycles (4ns)'),
+rabi_config = QUAConfig(QUAParameter("scale_amplitude", [0.1,0.5,1.0, 2.0]),
+                        QUAParameter("duration", [200//4, 400//4, 800//4, 300//4], units='clock_cycles (4ns)'),
                         em.Parameter('qubit_idx',2))
 
 
 prog = rabi.for_each(rabi_config)
-
-# ## test play_pulse
-# t_vec = [10, 30, 100]
-# a_vec = [0.25, 1.0, 0.5]
-# f_vec = [int(30e6),int(40e6), int(50e6)] #
-# # t_mesh, a_mesh = np.meshgrid(t_vec, a_vec)
-#
-# with program() as prog:
-#     I=declare(fixed)
-#
-#     f = declare(int)
-#     t = declare(int)
-#     a = declare(fixed)
-#
-#     with for_each_((t, a, f), (t_vec, a_vec,f_vec)):
-#         play_pulse('X_1' , 'drive1',scale_amplitude=a)
-#         # align("drive1", "readout1")
-#         # measure("readout", "readout1",None,("simple_cos", "out_I", I))
 
 
 #### main #####
@@ -352,6 +342,8 @@ prog = rabi.for_each(rabi_config)
 qmManager = QuantumMachinesManager()
 job = qmManager.simulate(config,prog, SimulationConfig(2500))
 samples = job.get_simulated_samples()
+results = job.result_handles
+
 
 #plot
 samples.con1.plot()
