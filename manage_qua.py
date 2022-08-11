@@ -1,6 +1,7 @@
 #TODO imports
 #TODO: support for np.arrays in experiment config
 #TODO: think about getting parameters from QUA config dict?
+# TODO get params file explicitely
 
 # manange_qua
 import itertools
@@ -12,7 +13,7 @@ sys.path.append("..")
 sys.path.append(r"\\132.64.80.214\overlordcommon\Users\Guy\PHD\repos\experiment-manager")
 import experiment_manager
 from general_utils import enumerated_product
-import Labber_util as lu
+import labber_util as lu
 
 #sys.path.append(r"\\132.64.80.214\overlordcommon\Users\Guy\PHD\repos\manage_qua\files copied from Naftali")
 #import device_parameters_2Q
@@ -20,8 +21,8 @@ import Labber_util as lu
 #import two_qubit_config_gates
 import importlib
 
-##importlib.reload(two_qubit_config_gates)
-#importlib.reload(experiment_manager)
+#importlib.reload(two_qubit_config_gates)
+importlib.reload(experiment_manager)
 
 import experiment_manager as em
 from two_qubit_config_gates import *
@@ -29,12 +30,11 @@ import Labber
 from qm.QuantumMachinesManager import QuantumMachinesManager
 from qm import SimulationConfig, LoopbackInterface
 from qm.qua import *
-import OPX.config_generator as config_generator
-import numpy as np
+#import OPX.config_generator as config_generator
 from matplotlib import pyplot as plt
-from os.path import join
-import os
-import qdac as qdac_lib
+#from os.path import join
+#import os
+#import qdac as qdac_lib
 
 plt.ion()
 
