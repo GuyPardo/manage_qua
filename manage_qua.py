@@ -315,6 +315,34 @@ class QUAExperiment:
         for param in self.stream.param_list:
             param.qua_type = 'stream'
 
+    def loop(self,loop_config:QUAConfig):
+        """
+        returns a QUA program that performs the experiment in an N-dimensional loop. if N=1 or 2, uses normal loops
+        within the QUA language. for N=3 or more - uses QUA's for_each_() which is not very efficient and can cause
+        problems for large loops.
+
+        :param loop_config:QUAConfig containing the experiment parameters that are used by self.single_run(), with
+        one or more iterated QUAParameters that will be looped on.
+
+        For the the N=1 or 2  (normal for_())case:the values of the iterated variable must be either linearly of logarithmically
+        spaced, and there is some issue specifically with logarithmically-spaced integer values (see
+        https://github.com/qua-platform/py-qua-tools/tree/main/qualang_tools/loops )
+
+        for the N>2 (for_each_()) case: values can be whatever you want.
+
+        loop_config must also include a regular Parameter with name 'repetitions' and an integer value to
+        indicate averaging repetitions #TODO input verification
+
+        :return: a QUA program
+        """
+        loop_dim = len(loop_config.get_qua_params().get_iterables())
+        if loop_dim == 1:
+            return self.one_d_loop(loop_config)
+        elif loop_dim ==2:
+            return self.two_d_loop(loop_config)
+        elif loop_dim > 2:
+            return self.nd_loop(loop_config)
+
     def one_d_loop(self, loop_config:QUAConfig):
         """
         perform the experiment in a 1-dimensional loop
