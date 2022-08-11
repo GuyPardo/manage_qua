@@ -1,13 +1,18 @@
 #TODO imports
 #TODO: support for np.arrays in experiment config
-#TODO: think about getting parameters from QUA config dict?
 # TODO get params file explicitely
+#TODO frequency and amplitude: more natural user interface
+#TODO time estimation
+# TODO support numpy
+
 
 # manange_qua
 import itertools
 import sys
 import typing
 from copy import deepcopy
+
+import numpy as np
 
 sys.path.append("..")
 sys.path.append(r"\\132.64.80.214\overlordcommon\Users\Guy\PHD\repos\experiment-manager")
@@ -107,20 +112,20 @@ def play_pulse(pulse, element, scale_amplitude=None, frequency=None, duration=No
 def qua_declare(type_):
     """
     performs QUA declare() statement with the correct type
-    :param type_:type: a type object. int, float or bool, or the string 'stream'  for q qua stream veriable
-    :return: a QUA variable with the appropriate type
+    :param type_:type: a type object. int or , float or bool, or the string 'stream'  for q qua stream variable
+    :return: a QUA variable with the appropriate type (int, fixed, bool. or stream)
     """
 
-    if type_ == int:
+    if issubclass(type_,int) or isinstance(type_,np.integer):
         return declare(int)
-    elif type_ == float:
+    elif issubclass(type_,float) or isinstance(type_,np.floating):
         return declare(fixed)
-    elif type_ == bool:
+    elif issubclass(type, bool) or issubclass(type, np.bool_):
         return declare(bool)
-    elif type_ =='stream':
+    elif type_ == 'stream':
         return declare_stream()
     else:
-        raise Exception("qua supports only int, float,  bool, or 'stream'")
+        raise Exception("qua supports only int, float,  bool, or 'stream'. ")
 
 
 #---------------------classes------------------------#
