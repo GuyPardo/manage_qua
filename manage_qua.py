@@ -5,7 +5,7 @@
 #TODO time estimation
 # TODO support numpy
 #TODO - choose not to average but to take all the values
-
+# TODO integrate dc constant flux
 
 # manange_qua
 import itertools
@@ -97,7 +97,7 @@ def play_pulse(pulse, element, scale_amplitude=None, frequency=None, duration=No
     # the play statement supports also a None value for duratio so we only have to worry about amplitude and frequency:
 
     # convert the bool information of whther we change amplitude, frequency, both or none into a number from 0 to 3:
-    indicator = bool_list_2_int([bool(scale_amplitude), bool(frequency)])
+    indicator = bool_list_2_int([not (scale_amplitude is None), not (frequency is None)])
 
     # if statement:
     if indicator == 0:  # = [0,0] change nothing (only possibly duration )
@@ -115,18 +115,18 @@ def play_pulse(pulse, element, scale_amplitude=None, frequency=None, duration=No
 def qua_declare(type_):
     """
     performs QUA declare() statement with the correct type
-    :param type_:type: a type object. int or , float or bool, or the string 'stream'  for q qua stream variable
+    :param type_:  a type object. int or , float or bool, or the string 'stream'  for q qua stream variable
     :return: a QUA variable with the appropriate type (int, fixed, bool. or stream)
     """
 
-    if issubclass(type_,int) or isinstance(type_,np.integer):
+    if type_ == 'stream':
+        return declare_stream()
+    elif issubclass(type_,int) or issubclass(type_,np.integer):
         return declare(int)
-    elif issubclass(type_,float) or isinstance(type_,np.floating):
+    elif issubclass(type_,float) or issubclass(type_,np.floating):
         return declare(fixed)
     elif issubclass(type, bool) or issubclass(type, np.bool_):
         return declare(bool)
-    elif type_ == 'stream':
-        return declare_stream()
     else:
         raise Exception("qua supports only int, float,  bool, or 'stream'. ")
 
@@ -330,7 +330,7 @@ class QUAExperiment:
         :return: a QUA program
         """
         # verify input
-        if len(loop_config.get_qua_params().get_iterated()) != 1:
+        if len(loop_config.get_qua_params().get_iterables()) != 1:
             raise ValueError("loop_config should have exactly one iterated QUAParameter")
 
         # get looped parameter:
@@ -375,7 +375,7 @@ class QUAExperiment:
         :return: a QUA program
         """
         # verify input
-        if len(loop_config.get_qua_params().get_iterated()) != 2:
+        if len(loop_config.get_qua_params().get_iterables()) != 2:
             raise ValueError("loop_config should have exactly two iterated QUAParameter")
 
         # get looped parameters:
