@@ -315,13 +315,17 @@ class QUAExperiment:
         for param in self.stream.param_list:
             param.qua_type = 'stream'
 
-
     def one_d_loop(self, loop_config:QUAConfig):
         """
-        perform the experiment in a 1-dimensional loop :param loop_config:QUAConfig containing the experiment
-        parameters that are used by self.single_run(). it has to have exactly one iterated QUAParameter that will be
-        looped on. loop_config also has to include a regular Parameter with name 'repetitions' and an integer value
-        to indicate averaging repetitions #TODO input verification
+        perform the experiment in a 1-dimensional loop
+
+        :param loop_config:QUAConfig containing the experiment parameters that are used by self.single_run(). it has
+        to have exactly one iterated QUAParameter that will be looped on.the values of the iterated variable must be
+        either linearly of logarithmically spaced, and there is some issue specifically with logarithmically-spaced
+        integer values (see https://github.com/qua-platform/py-qua-tools/tree/main/qualang_tools/loops )
+
+        loop_config must also include a regular Parameter with name 'repetitions' and an integer value to
+        indicate averaging repetitions #TODO input verification
 
         :return: a QUA program
         """
@@ -350,14 +354,57 @@ class QUAExperiment:
             loop_length = len(variable.value)
             with stream_processing():
                 for param in self.stream.param_list:
-                    param.qua_var.buffer(loop_length).average().save(param.name,)# TODO make sure that names are the same. maybe say this in doc
+                    param.qua_var.buffer(loop_length).average().save(param.name)# TODO make sure that names are the same. maybe say this in doc
                     # param.qua_var.buffer(400,100).save_all(param.name) # this is the syntax for save all, for later implementation
 
         return prog
 
+    def two_d_loop(self, loop_config: QUAConfig):
+        """
+        perform the experiment in a 2-dimensional loop
 
+        :param loop_config:QUAConfig containing the experiment parameters that are used by self.single_run(). it has
+        to have exactly two iterated QUAParameter that will be looped on (the first among the two variables is the
+        outer loop). the values of the iterated variables must be either linearly of logarithmically spaced,
+        and there is some issue specifically with logarithmically-spaced integer values (see
+        https://github.com/qua-platform/py-qua-tools/tree/main/qualang_tools/loops )
 
+        loop_config must also include a regular Parameter with name 'repetitions' and an integer value to
+        indicate averaging repetitions #TODO input verification
 
+        :return: a QUA program
+        """
+        # verify input
+        if len(loop_config.get_qua_params().get_iterated()) != 2:
+            raise ValueError("loop_config should have exactly two iterated QUAParameter")
+
+        # get looped parameters:
+        variable1 = loop_config.get_qua_params().get_iterables()[0]
+        variable2 = loop_config.get_qua_params().get_iterables()[1]
+
+        # QUA program:
+        with program() as prog:
+            # initializations
+            self.output_temp.get_qua_vars(assign_flag=False)
+            self.stream.get_qua_vars(assign_flag=False)
+            loop_config.get_qua_vars()
+
+            # external averaging loop:
+            rep = declare(int)
+            with for_(rep, 0, rep < loop_config.repetitions.value, rep + 1):
+                # inner  loops:
+                with for_(*from_array(variable1.qua_var, variable1.value)):
+                    with for_(*from_array(variable2.qua_var, variable2.value)):
+                        self.single_run(loop_config)
+
+            # process stream:
+            loop_lengths = [len(variable1.value), len(variable2.value)]
+            with stream_processing():
+                for param in self.stream.param_list:
+                    param.qua_var.buffer(*loop_lengths).average().save(param.name)  # TODO make sure that names are the same. maybe say this in doc
+                    # param.qua_var.buffer(400,100).save_all(param.name) # this is the syntax for save all, for later implementation
+
+        return prog
 
     def nd_loop(self, loop_config:QUAConfig):
         """
