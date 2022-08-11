@@ -4,6 +4,7 @@
 #TODO frequency and amplitude: more natural user interface
 #TODO time estimation
 # TODO support numpy
+#TODO - choose not to average but to take all the values
 
 
 # manange_qua
@@ -40,6 +41,8 @@ from matplotlib import pyplot as plt
 #from os.path import join
 #import os
 #import qdac as qdac_lib
+
+from qualang_tools.loops import from_array
 
 plt.ion()
 
@@ -311,6 +314,50 @@ class QUAExperiment:
         self.stream = deepcopy(stream_config)
         for param in self.stream.param_list:
             param.qua_type = 'stream'
+
+
+    def one_d_loop(self, loop_config:QUAConfig):
+        """
+        perform the experiment in a 1-dimensional loop :param loop_config:QUAConfig containing the experiment
+        parameters that are used by self.single_run(). it has to have exactly one iterated QUAParameter that will be
+        looped on. loop_config also has to include a regular Parameter with name 'repetitions' and an integer value
+        to indicate averaging repetitions #TODO input verification
+
+        :return: a QUA program
+        """
+        # verify input
+        if len(loop_config.get_qua_params().get_iterated()) != 1:
+            raise ValueError("loop_config should have exactly one iterated QUAParameter")
+
+        # get looped parameter:
+        variable = loop_config.get_qua_params().get_iterables()[0] # there is only one iterated QUAParameter
+
+        # QUA program:
+        with program() as prog:
+            # initializations
+            self.output_temp.get_qua_vars(assign_flag=False)
+            self.stream.get_qua_vars(assign_flag=False)
+            loop_config.get_qua_vars()
+
+            # external averaging loop:
+            rep = declare(int)
+            with for_(rep,0,rep<loop_config.repetitions.value,rep+1):
+                # inner 1d loop:
+                with for_(*from_array(variable.qua_var, variable.value)):
+                    self.single_run(loop_config)
+
+            # process stream:
+            loop_length = len(variable.value)
+            with stream_processing():
+                for param in self.stream.param_list:
+                    param.qua_var.buffer(loop_length).average().save(param.name,)# TODO make sure that names are the same. maybe say this in doc
+                    # param.qua_var.buffer(400,100).save_all(param.name) # this is the syntax for save all, for later implementation
+
+        return prog
+
+
+
+
 
     def nd_loop(self, loop_config:QUAConfig):
         """
