@@ -303,6 +303,13 @@ class QUAExperiment:
     def single_run(self, config:QUAConfig):
         raise NotImplemented()
 
+    def preparation(self,config:QUAConfig):
+        """
+        to be implemeneted in child class a section of QUA code to be preformed before all loops
+        :param config:QUAConfig the  experiment configuration
+        """
+        pass
+
     def initialize_streams(self, stream_config:QUAConfig):
         """
         initialize the attributes self.stream and self.output_temp
@@ -370,6 +377,8 @@ class QUAExperiment:
             self.output_temp.get_qua_vars(assign_flag=False)
             self.stream.get_qua_vars(assign_flag=False)
             loop_config.get_qua_vars()
+            # pre-loop preparations:
+            self.preparation(loop_config)
 
             # external averaging loop:
             rep = declare(int)
@@ -406,6 +415,8 @@ class QUAExperiment:
         if len(loop_config.get_qua_params().get_iterables()) != 2:
             raise ValueError("loop_config should have exactly two iterated QUAParameter")
 
+
+
         # get looped parameters:
         variable1 = loop_config.get_qua_params().get_iterables()[0]
         variable2 = loop_config.get_qua_params().get_iterables()[1]
@@ -416,7 +427,8 @@ class QUAExperiment:
             self.output_temp.get_qua_vars(assign_flag=False)
             self.stream.get_qua_vars(assign_flag=False)
             loop_config.get_qua_vars()
-
+            # pre-loop preparations:
+            self.preparation(loop_config)
             # external averaging loop:
             rep = declare(int)
             with for_(rep, 0, rep < loop_config.repetitions.value, rep + 1):
@@ -458,6 +470,8 @@ class QUAExperiment:
             self.output_temp.get_qua_vars(assign_flag=False)
             self.stream.get_qua_vars(assign_flag=False)
             loop_config.get_qua_vars()
+            # pre-loop preparations:
+            self.preparation(loop_config)
             # QUA loops:
             # external averaging loop:
             rep = declare(int)
