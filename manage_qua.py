@@ -94,7 +94,7 @@ def play_pulse(pulse, element, scale_amplitude=None, frequency=None, duration=No
     :return:
     """
 
-    # the play statement supports also a None value for duratio so we only have to worry about amplitude and frequency:
+    # the play statement supports also a None value for duration so we only have to worry about amplitude and frequency:
 
     # convert the bool information of whther we change amplitude, frequency, both or none into a number from 0 to 3:
     indicator = bool_list_2_int([not (scale_amplitude is None), not (frequency is None)])
