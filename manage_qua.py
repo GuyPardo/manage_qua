@@ -566,9 +566,7 @@ class QUAExperiment:
             log_name = labber_log_name
         else:
             log_name = self.experiment_name
-            log_name = log_name + "_loop_on"
-            for d in step_list:
-                log_name=log_name + "_" + d["name"]
+
 
         log_name = lu.get_log_name(log_name) # this generates automatic numbering and prevents overwrite
 
@@ -600,9 +598,12 @@ class QUAExperiment:
 
         for key in device_parameters_2Q.device_parameters.keys(): #TODO later device_parameter will be an argument that all the functions need to recieve
             comment_str = comment_str + key + "  :  " + str(device_parameters_2Q.device_parameters[key])  + "\n"
-
+        for d in step_list:
+            self.labber_tags.append = "loop_on_" + d["name"]
         logfile.setComment(comment_str)
         logfile.setTags(self.labber_tags)
+
+
 
         return logfile
 
