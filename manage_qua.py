@@ -599,7 +599,7 @@ class QUAExperiment:
         for key in device_parameters_2Q.device_parameters.keys(): #TODO later device_parameter will be an argument that all the functions need to recieve
             comment_str = comment_str + key + "  :  " + str(device_parameters_2Q.device_parameters[key])  + "\n"
         for d in step_list:
-            self.labber_tags.append = "loop_on_" + d["name"]
+            self.labber_tags.append("loop_on_" + d["name"])
         logfile.setComment(comment_str)
         logfile.setTags(self.labber_tags)
 
